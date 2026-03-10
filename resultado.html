@@ -497,16 +497,92 @@ Este relatório possui finalidade informativa e de apoio à análise veicular. A
 const params = new URLSearchParams(window.location.search);
 const placa = params.get('placa');
 
-if (placa) {
-document.getElementById('placa-veiculo').textContent = placa.toUpperCase();
+function setText(id, value) {
+const el = document.getElementById(id);
+if (el) {
+el.textContent = value || '-';
+}
 }
 
-// Exemplo de preenchimento futuro:
-// fetch('/api/resultado?placa=' + placa)
-// .then(res => res.json())
-// .then(data => {
-// document.getElementById('marca-modelo').textContent = data.marca_modelo || '-';
-// });
+function setStatusBadge(id, value) {
+const el = document.getElementById(id);
+if (!el) return;
+
+el.textContent = value || '-';
+
+el.classList.remove('ok', 'alerta', 'critico');
+
+const texto = (value || '').toLowerCase();
+
+if (
+texto.includes('sem registro') ||
+texto.includes('não consta') ||
+texto.includes('nao consta') ||
+texto.includes('regular') ||
+texto.includes('inexistente')
+) {
+el.classList.add('ok');
+} else if (
+texto.includes('pendente') ||
+texto.includes('ativo') ||
+texto.includes('constam') ||
+texto.includes('restrição') ||
+texto.includes('restricao') ||
+texto.includes('em integração') ||
+texto.includes('em integracao')
+) {
+el.classList.add('alerta');
+} else {
+el.classList.add('alerta');
+}
+}
+
+async function carregarRelatorio() {
+if (!placa) {
+setText('placa-veiculo', 'PLACA NÃO INFORMADA');
+setText('resumo-consulta', 'Nenhuma placa foi informada para consulta.');
+return;
+}
+
+setText('placa-veiculo', placa.toUpperCase());
+setText('resumo-consulta', 'Carregando relatório...');
+
+try {
+const response = await fetch(`/.netlify/functions/get-report?placa=${encodeURIComponent(placa)}`);
+const data = await response.json();
+
+if (!response.ok) {
+throw new Error(data.error || 'Erro ao carregar relatório');
+}
+
+setText('placa-veiculo', data.placa || placa.toUpperCase());
+
+setText('marca-modelo', data.vehicle?.marca_modelo);
+setText('ano', data.vehicle?.ano);
+setText('cor', data.vehicle?.cor);
+setText('combustivel', data.vehicle?.combustivel);
+setText('fipe', data.vehicle?.fipe);
+setText('chassi', data.vehicle?.chassi);
+setText('renavam', data.vehicle?.renavam);
+
+setStatusBadge('roubo-furto', data.status?.roubo_furto);
+setStatusBadge('leilao', data.status?.leilao);
+setStatusBadge('debitos', data.status?.debitos);
+setStatusBadge('restricoes', data.status?.restricoes);
+setStatusBadge('gravame', data.status?.gravame);
+setStatusBadge('licenciamento', data.status?.licenciamento_ipva);
+
+setText('instituicao-credora', data.details?.instituicao_credora);
+setText('detalhes-bloqueio', data.details?.detalhes_bloqueio);
+
+setText('resumo-consulta', data.summary || 'Relatório carregado com sucesso.');
+} catch (error) {
+console.error('Erro ao carregar relatório:', error);
+setText('resumo-consulta', 'Não foi possível carregar o relatório no momento.');
+}
+}
+
+carregarRelatorio();
 </script>
 </body>
 </html>
