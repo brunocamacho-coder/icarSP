@@ -6,7 +6,10 @@ exports.handler = async (event) => {
     const accessToken = process.env.MP_ACCESS_TOKEN;
 
     if (!accessToken) {
-      throw new Error('Access Token não configurado');
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Access Token não configurado' })
+      };
     }
 
     const response = await fetch(`https://api.mercadopago.com/v1/payments/${payment_id}`, {
@@ -17,21 +20,16 @@ exports.handler = async (event) => {
 
     const data = await response.json();
 
-    const pago = data.status === 'approved';
-
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        pago,
-        status: data.status,
-        payment_id: data.id,
-        status_detail: data.status_detail
+        pago: data.status === 'approved',
+        status: data.status
       })
     };
 
   } catch (error) {
-    console.error('Erro ao verificar pagamento:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
