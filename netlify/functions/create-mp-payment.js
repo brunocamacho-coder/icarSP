@@ -9,9 +9,17 @@ exports.handler = async (event) => {
     if (!accessToken) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Access Token não configurado' })
+        body: JSON.stringify({ error: 'Access Token não configurado no Netlify.' })
       };
     }
+
+    const payload = {
+      transaction_amount: 14.90,
+      description: `Consulta placa ${placa} - iCarSP`,
+      payment_method_id: 'pix',
+      payer: { email: 'cliente@email.com' },
+      date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+    };
 
     const response = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
@@ -20,46 +28,38 @@ exports.handler = async (event) => {
         'Content-Type': 'application/json',
         'X-Idempotency-Key': uuidv4()
       },
-      body: JSON.stringify({
-        transaction_amount: 14.90,
-        description: `Consulta placa ${placa} - iCarSP`,
-        payment_method_id: 'pix',
-        payer: {
-          email: 'cliente@email.com',
-          first_name: 'Cliente',
-          identification: {
-            type: 'CPF',
-            number: '00000000000'
-          }
-        },
-        date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString()
-      })
+      body: JSON.stringify(payload)
     });
 
     const data = await response.json();
 
+    // Se a resposta não for OK (código 2xx), retorna o erro detalhado do Mercado Pago
     if (!response.ok) {
       return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: data.message })
+        statusCode: 200, // Mantemos 200 para ver o erro no frontend
+        body: JSON.stringify({
+          success: false,
+          error: data.message || 'Erro na API do Mercado Pago',
+          detalhes: data
+        })
       };
     }
 
+    // Se deu tudo certo, retorna os dados do PIX
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
-        payment_id: data.id,
-        qr_code: data.point_of_interaction.transaction_data.qr_code,
-        qr_code_base64: data.point_of_interaction.transaction_data.qr_code_base64
+        qr_code: data.point_of_interaction?.transaction_data?.qr_code,
+        qr_code_base64: data.point_of_interaction?.transaction_data?.qr_code_base64,
+        payment_id: data.id
       })
     };
 
   } catch (error) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      body: JSON.stringify({ error: `Erro interno: ${error.message}` })
     };
   }
 };
