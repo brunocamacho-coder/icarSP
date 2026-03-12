@@ -408,11 +408,11 @@ font-weight: 800;
 cursor: pointer;
 transition: all 0.25s ease;
 box-shadow: 0 12px 24px rgba(34, 197, 94, 0.2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-decoration: none;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+gap: 8px;
+text-decoration: none;
 }
 
 .unlock-button:hover {
@@ -522,7 +522,6 @@ padding: 22px;
 <span>Cor</span>
 <strong id="preview-cor">-</strong>
 </div>
-
 </div>
 </div>
 
@@ -548,7 +547,7 @@ padding: 22px;
 <strong id="preview-price">R$ 19,99</strong>
 </div>
 <button id="unlock-report-button" class="unlock-button">
-<i class="fa fa-unlock-keyhole" style="margin-right: 8px;"></i>
+<i class="fa fa-unlock-keyhole"></i>
 Desbloquear relatório completo
 </button>
 </div>
@@ -736,17 +735,17 @@ Consultar placa agora
 
 <!-- Modal PIX Mercado Pago -->
 <div id="pix-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center;">
-  <div style="background: white; padding: 30px; border-radius: 16px; max-width: 400px; text-align: center;">
-    <h2 style="color: #333; margin-bottom: 20px;">Pagamento PIX</h2>
-    <div id="qr-code-container" style="margin: 20px auto; min-height: 200px; display: flex; align-items: center; justify-content: center;"></div>
-    <p style="color: #666; margin: 15px 0;">Escaneie o QR Code ou copie o código PIX abaixo:</p>
-    <input type="text" id="pix-copia-cola" readonly style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #f5f5f5;">
-    <div style="display: flex; gap: 10px; justify-content: center;">
-      <button onclick="copiarPix()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">Copiar código</button>
-      <button onclick="fecharPixModal()" style="background: #666; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">Fechar</button>
-    </div>
-    <div id="status-pagamento" style="margin-top: 15px; font-weight: bold; color: #333;"></div>
-  </div>
+<div style="background: white; padding: 30px; border-radius: 16px; max-width: 400px; width: calc(100% - 32px); text-align: center;">
+<h2 style="color: #333; margin-bottom: 20px;">Pagamento PIX</h2>
+<div id="qr-code-container" style="margin: 20px auto; min-height: 200px; display: flex; align-items: center; justify-content: center;"></div>
+<p style="color: #666; margin: 15px 0;">Escaneie o QR Code ou copie o código PIX abaixo:</p>
+<input type="text" id="pix-copia-cola" readonly style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #f5f5f5;">
+<div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+<button onclick="copiarPix()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">Copiar código</button>
+<button onclick="fecharPixModal()" style="background: #666; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">Fechar</button>
+</div>
+<div id="status-pagamento" style="margin-top: 15px; font-weight: bold; color: #333;"></div>
+</div>
 </div>
 
 <script>
@@ -757,19 +756,9 @@ return String(valor || '')
 }
 
 function setPreviewText(id, value) {
-  const element = document.getElementById(id);
-  if (!element) return;
-
-  if (id === 'preview-fipe' && value && !isNaN(parseFloat(value))) {
-    const numero = parseFloat(value);
-    const valorFormatado = numero.toLocaleString('pt-BR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    });
-    element.textContent = valorFormatado;
-  } else {
-    element.textContent = value || '-';
-  }
+const element = document.getElementById(id);
+if (!element) return;
+element.textContent = value || '-';
 }
 
 function mostrarPreview(data) {
@@ -782,7 +771,7 @@ setPreviewText('preview-uf', data.basic?.uf_registro);
 setPreviewText('preview-cor', data.basic?.cor);
 setPreviewText('preview-alert-count', data.teaser?.alertCount);
 setPreviewText('preview-teaser-message', data.teaser?.message);
-setPreviewText('preview-price', data.offer?.price);
+setPreviewText('preview-price', data.offer?.price || 'R$ 19,99');
 
 const preview = document.getElementById('preview-result');
 preview.style.display = 'block';
@@ -829,94 +818,119 @@ restaurarBotaoBusca();
 }
 });
 
-// ---------- NOVO CÓDIGO MERCADO PAGO ----------
 let placaAtual = '';
+let paymentIdAtual = '';
+let pollingInterval = null;
 
 async function iniciarPagamentoMP() {
-  placaAtual = document.getElementById('preview-placa').textContent.trim();
-  
-  if (!placaAtual || placaAtual === '-') {
-    alert('Faça a consulta da placa primeiro.');
-    return;
-  }
+placaAtual = document.getElementById('preview-placa').textContent.trim();
 
-  const modal = document.getElementById('pix-modal');
-  const qrContainer = document.getElementById('qr-code-container');
-  const pixInput = document.getElementById('pix-copia-cola');
-  const statusDiv = document.getElementById('status-pagamento');
-  
-  modal.style.display = 'flex';
-  statusDiv.innerHTML = 'Gerando pagamento...';
-  qrContainer.innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size: 40px; color: #666;"></i>';
+if (!placaAtual || placaAtual === '-') {
+alert('Faça a consulta da placa primeiro.');
+return;
+}
 
-  try {
-    const response = await fetch('/.netlify/functions/create-mp-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ placa: placaAtual })
-    });
+const modal = document.getElementById('pix-modal');
+const qrContainer = document.getElementById('qr-code-container');
+const pixInput = document.getElementById('pix-copia-cola');
+const statusDiv = document.getElementById('status-pagamento');
 
-    const data = await response.json();
+modal.style.display = 'flex';
+statusDiv.innerHTML = 'Gerando pagamento...';
+qrContainer.innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size: 40px; color: #666;"></i>';
+pixInput.value = '';
 
-    if (data.success) {
-      if (data.qr_code_base64) {
-        qrContainer.innerHTML = `<img src="data:image/png;base64,${data.qr_code_base64}" style="width: 200px; height: 200px;">`;
-      } else {
-        qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.qr_code)}">`;
-      }
-      
-      pixInput.value = data.qr_code;
-      statusDiv.innerHTML = '⏳ Pagamento PIX gerado! Aguardando confirmação...';
-      
-      verificarPagamentoMP(data.payment_id);
-    } else {
-      statusDiv.innerHTML = '❌ Erro ao gerar pagamento. Tente novamente.';
-      qrContainer.innerHTML = '';
-    }
-  } catch (error) {
-    console.error('Erro:', error);
-    statusDiv.innerHTML = '❌ Erro: ' + error.message;
-    qrContainer.innerHTML = '';
-  }
+try {
+const response = await fetch('/.netlify/functions/create-mp-payment', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ placa: placaAtual })
+});
+
+const data = await response.json();
+
+if (!response.ok) {
+throw new Error(data.error || data.message || 'Erro ao gerar pagamento');
+}
+
+const paymentId = data.paymentId || data.payment_id;
+
+if (!paymentId) {
+throw new Error('paymentId não retornado pela função de pagamento');
+}
+
+paymentIdAtual = String(paymentId);
+
+if (data.qr_code_base64) {
+qrContainer.innerHTML = `<img src="data:image/png;base64,${data.qr_code_base64}" style="width: 200px; height: 200px;" alt="QR Code PIX">`;
+} else if (data.qr_code) {
+qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.qr_code)}" alt="QR Code PIX">`;
+} else {
+qrContainer.innerHTML = '<p style="color:#333;">QR Code não disponível.</p>';
+}
+
+pixInput.value = data.pix_copia_e_cola || data.qr_code || '';
+statusDiv.innerHTML = '⏳ Pagamento PIX gerado! Aguardando confirmação...';
+
+verificarPagamentoMP(paymentIdAtual);
+} catch (error) {
+console.error('Erro ao iniciar pagamento:', error);
+statusDiv.innerHTML = '❌ Erro: ' + error.message;
+qrContainer.innerHTML = '';
+}
 }
 
 function verificarPagamentoMP(paymentId) {
-  const interval = setInterval(async () => {
-    try {
-      const response = await fetch(`/.netlify/functions/check-mp-payment?payment_id=${paymentId}`);
-      const data = await response.json();
+if (pollingInterval) {
+clearInterval(pollingInterval);
+}
 
-      if (data.pago) {
-        clearInterval(interval);
-        document.getElementById('status-pagamento').innerHTML = '✅ PAGAMENTO CONFIRMADO! Redirecionando...';
-        setTimeout(() => {
-          window.location.href = `/resultado.html?placa=${placaAtual}`;
-        }, 2000);
-      } else if (data.status === 'rejected' || data.status === 'cancelled') {
-        clearInterval(interval);
-        document.getElementById('status-pagamento').innerHTML = '❌ Pagamento não confirmado. Tente novamente.';
-      }
-    } catch (error) {
-      console.error('Erro ao verificar:', error);
-    }
-  }, 3000);
+pollingInterval = setInterval(async () => {
+try {
+const response = await fetch(`/.netlify/functions/check-mp-payment?payment_id=${encodeURIComponent(paymentId)}`);
+const data = await response.json();
+
+if (data.pago || data.status === 'approved') {
+clearInterval(pollingInterval);
+pollingInterval = null;
+
+document.getElementById('status-pagamento').innerHTML = '✅ PAGAMENTO CONFIRMADO! Redirecionando...';
+
+setTimeout(() => {
+window.location.href = `/resultado.html?paymentId=${encodeURIComponent(paymentId)}`;
+}, 2000);
+} else if (data.status === 'rejected' || data.status === 'cancelled') {
+clearInterval(pollingInterval);
+pollingInterval = null;
+
+document.getElementById('status-pagamento').innerHTML = '❌ Pagamento não confirmado. Tente novamente.';
+}
+} catch (error) {
+console.error('Erro ao verificar pagamento:', error);
+}
+}, 3000);
 }
 
 function copiarPix() {
-  const input = document.getElementById('pix-copia-cola');
-  input.select();
-  document.execCommand('copy');
-  alert('Código PIX copiado!');
+const input = document.getElementById('pix-copia-cola');
+input.select();
+input.setSelectionRange(0, 99999);
+document.execCommand('copy');
+alert('Código PIX copiado!');
 }
 
 function fecharPixModal() {
-  document.getElementById('pix-modal').style.display = 'none';
-  document.getElementById('qr-code-container').innerHTML = '';
-  document.getElementById('pix-copia-cola').value = '';
-  document.getElementById('status-pagamento').innerHTML = '';
+document.getElementById('pix-modal').style.display = 'none';
+document.getElementById('qr-code-container').innerHTML = '';
+document.getElementById('pix-copia-cola').value = '';
+document.getElementById('status-pagamento').innerHTML = '';
+
+if (pollingInterval) {
+clearInterval(pollingInterval);
+pollingInterval = null;
+}
 }
 
-// Atualiza o evento do botão de pagamento
 document.getElementById('unlock-report-button').addEventListener('click', iniciarPagamentoMP);
 </script>
 
