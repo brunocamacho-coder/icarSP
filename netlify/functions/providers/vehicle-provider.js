@@ -3,6 +3,10 @@ import fetch from 'node-fetch';
 const API_KEY = process.env.CONSULTARPLACA_API_KEY;
 const EMAIL = process.env.CONSULTARPLACA_EMAIL;
 
+// Cache simples em memória por placa
+const cache = new Map();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 function normalizarPlaca(placa = '') {
 return String(placa)
 .replace(/[^A-Za-z0-9]/g, '')
@@ -23,49 +27,23 @@ currency: 'BRL'
 });
 }
 
-function montarTeaser(report) {
-let alertCount = 0;
-const alertas = [];
+function getCache(key) {
+const item = cache.get(key);
+if (!item) return null;
 
-const status = report?.status || {};
-
-const campos = [
-['roubo_furto', 'Roubo/furto'],
-['leilao', 'Leilão'],
-['debitos', 'Débitos'],
-['restricoes', 'Restrições'],
-['gravame', 'Gravame'],
-['licenciamento_ipva', 'Licenciamento/IPVA']
-];
-
-for (const [key, label] of campos) {
-const valor = String(status[key] || '').toLowerCase();
-
-const ok =
-valor.includes('sem registro') ||
-valor.includes('não consta') ||
-valor.includes('nao consta') ||
-valor.includes('regular') ||
-valor.includes('inexistente') ||
-valor.includes('não possui') ||
-valor.includes('nao possui');
-
-if (!ok && valor && valor !== '-') {
-alertCount += 1;
-alertas.push(label);
-}
+if (Date.now() - item.timestamp > CACHE_TTL_MS) {
+cache.delete(key);
+return null;
 }
 
-const message =
-alertCount > 0
-? `Encontramos ${alertCount} alerta(s) ou verificação(ões) adicionais para esta placa.`
-: 'Encontramos dados básicos do veículo e verificações adicionais disponíveis no relatório completo.';
+return item.value;
+}
 
-return {
-alertCount,
-message,
-itens: alertas
-};
+function setCache(key, value) {
+cache.set(key, {
+value,
+timestamp: Date.now()
+});
 }
 
 async function consultarEndpoint(url) {
@@ -189,7 +167,7 @@ valor_total_infracoes_renainf: 'Disponível no relatório completo',
 resumo_infracoes_renainf: 'Disponível no relatório completo'
 },
 offer: {
-price: 'R$ 14,99'
+price: 'R$ 19,99'
 }
 };
 }
@@ -199,7 +177,6 @@ const informacoesFipe = fipeData?.dados?.informacoes_fipe;
 
 if (Array.isArray(informacoesFipe) && informacoesFipe.length > 0) {
 const primeiro = informacoesFipe[0];
-
 report.vehicle.fipe = formatarPrecoFipe(primeiro?.preco);
 report.details.codigo_fipe = safe(primeiro?.codigo_fipe);
 report.details.modelo_versao_fipe = safe(primeiro?.modelo_versao);
@@ -255,7 +232,6 @@ if (possuiInfracoes === 'sim' && infracoes.length > 0) {
 report.status.debitos = `Constam ${infracoes.length} infração(ões) RENAINF`;
 
 let total = 0;
-
 const resumo = infracoes.slice(0, 3).map((item) => {
 const dados = item?.dados_infracao || {};
 const valorAplicado = String(dados?.valor_aplicado || '0').replace(',', '.');
@@ -296,19 +272,18 @@ if (!placa || placa.length < 7) {
 throw new Error('Placa inválida.');
 }
 
+// GRÁTIS: chama só a consulta básica
 const apiData = await consultarDadosBasicos(placa);
 const report = mapearDadosBasicos(placa, apiData);
-
-report.teaser = {
-alertCount: 12,
-message: 'Identificamos verificações adicionais, possíveis pendências e dados complementares liberados somente no relatório completo.'
-};
 
 return {
 success: true,
 placa: report.placa,
 basic: report.basic,
-teaser: report.teaser,
+teaser: {
+alertCount: 12,
+message: 'Identificamos verificações adicionais e informações complementares liberadas somente no relatório completo.'
+},
 offer: report.offer
 };
 }
@@ -318,6 +293,12 @@ const placa = normalizarPlaca(placaInformada);
 
 if (!placa || placa.length < 7) {
 throw new Error('Placa inválida.');
+}
+
+const cacheKey = `report:${placa}`;
+const cached = getCache(cacheKey);
+if (cached) {
+return cached;
 }
 
 const apiData = await consultarDadosBasicos(placa);
@@ -351,7 +332,6 @@ aplicarDadosRenainf(report, renainfData);
 console.warn('RENAINF não disponível para esta placa:', error.message);
 }
 
-report.teaser = montarTeaser(report);
-
+setCache(cacheKey, report);
 return report;
 }

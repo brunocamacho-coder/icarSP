@@ -218,6 +218,7 @@ border-radius: 999px;
 font-size: 0.82rem;
 font-weight: 700;
 white-space: nowrap;
+text-align: center;
 }
 
 .ok {
@@ -519,8 +520,25 @@ Este relatório possui finalidade informativa e de apoio à análise veicular. A
 </div>
 
 <script>
+const params = new URLSearchParams(window.location.search);
+const placa = params.get('placa');
+
+function valorOuTraco(valor) {
+if (valor === null || valor === undefined || valor === '') return '-';
+return String(valor);
+}
+
+function getFirst(...values) {
+for (const value of values) {
+if (value !== undefined && value !== null && value !== '') {
+return value;
+}
+}
+return '-';
+}
+
 function formatarFIPE(valor) {
-if (!valor || valor === '-') return 'R$ -';
+if (!valor || valor === '-') return '-';
 
 if (typeof valor === 'string' && valor.includes('R$')) {
 return valor;
@@ -533,7 +551,7 @@ String(valor)
 .replace(',', '.')
 );
 
-if (isNaN(numero)) return valor || 'R$ -';
+if (isNaN(numero)) return valorOuTraco(valor);
 
 return numero.toLocaleString('pt-BR', {
 style: 'currency',
@@ -541,94 +559,316 @@ currency: 'BRL'
 });
 }
 
-const params = new URLSearchParams(window.location.search);
-const placa = params.get('placa');
+function formatarValorMonetario(valor) {
+if (!valor || valor === '-') return '-';
 
-function setText(id, value) {
+if (typeof valor === 'string' && valor.includes('R$')) {
+return valor;
+}
+
+const numero = parseFloat(
+String(valor)
+.replace(/[^\d,.-]/g, '')
+.replace(/\./g, '')
+.replace(',', '.')
+);
+
+if (isNaN(numero)) return valorOuTraco(valor);
+
+return numero.toLocaleString('pt-BR', {
+style: 'currency',
+currency: 'BRL'
+});
+}
+
+function setText(id, value, formatter = null) {
 const el = document.getElementById(id);
 if (!el) return;
 
-if (id === 'fipe') {
-el.textContent = formatarFIPE(value);
-} else {
-el.textContent = value || '-';
+const finalValue = formatter ? formatter(value) : valorOuTraco(value);
+el.textContent = finalValue;
 }
+
+function definirClasseStatus(texto) {
+const t = String(texto || '').toLowerCase();
+
+if (
+t.includes('sem registro') ||
+t.includes('não consta') ||
+t.includes('nao consta') ||
+t.includes('regular') ||
+t.includes('inexistente') ||
+t.includes('não possui') ||
+t.includes('nao possui') ||
+t.includes('sem débitos') ||
+t.includes('sem debitos') ||
+t.includes('nada consta') ||
+t.includes('livre')
+) {
+return 'ok';
+}
+
+if (
+t.includes('roubo') ||
+t.includes('furto') ||
+t.includes('bloqueio') ||
+t.includes('restrição grave') ||
+t.includes('restricao grave')
+) {
+return 'critico';
+}
+
+if (
+t.includes('ativo') ||
+t.includes('constam') ||
+t.includes('pendente') ||
+t.includes('indisponível') ||
+t.includes('indisponivel') ||
+t.includes('restrição') ||
+t.includes('restricao') ||
+t.includes('gravame') ||
+t.includes('débito') ||
+t.includes('debito') ||
+t.includes('leilão') ||
+t.includes('leilao')
+) {
+return 'alerta';
+}
+
+return 'alerta';
 }
 
 function setStatusBadge(id, value) {
 const el = document.getElementById(id);
 if (!el) return;
 
-el.textContent = value || '-';
+const texto = valorOuTraco(value);
+el.textContent = texto;
 el.classList.remove('ok', 'alerta', 'critico');
-
-const texto = String(value || '').toLowerCase();
-
-if (
-texto.includes('sem registro') ||
-texto.includes('não consta') ||
-texto.includes('nao consta') ||
-texto.includes('regular') ||
-texto.includes('inexistente') ||
-texto.includes('não possui') ||
-texto.includes('nao possui')
-) {
-el.classList.add('ok');
-} else if (
-texto.includes('ativo') ||
-texto.includes('constam') ||
-texto.includes('pendente') ||
-texto.includes('indisponível') ||
-texto.includes('indisponivel') ||
-texto.includes('restrição') ||
-texto.includes('restricao')
-) {
-el.classList.add('alerta');
-} else {
-el.classList.add('alerta');
+el.classList.add(definirClasseStatus(texto));
 }
+
+function normalizarDados(data) {
+const veiculo = data.veiculo || data.vehicle || {};
+const gravame = data.gravame || {};
+const proprietario = data.proprietarioAtual || data.proprietario_atual || data.proprietario || {};
+const fipe = data.precoFipe || data.fipe || {};
+const status = data.status || {};
+const detalhes = data.details || data.detalhes || {};
+
+return {
+placa: getFirst(data.placa, veiculo.placa, placa ? placa.toUpperCase() : '-'),
+
+marcaModelo: getFirst(
+veiculo.marca_modelo,
+veiculo.marcaModelo,
+veiculo.modelo,
+detalhes.marca_modelo
+),
+
+ano: getFirst(
+veiculo.ano,
+veiculo.ano_modelo,
+veiculo.anoModelo
+),
+
+cor: getFirst(veiculo.cor, detalhes.cor),
+combustivel: getFirst(veiculo.combustivel, detalhes.combustivel),
+
+fipeValor: getFirst(
+fipe.valor,
+fipe.preco,
+fipe.valor_fipe,
+detalhes.valor_fipe,
+veiculo.fipe
+),
+
+chassi: getFirst(veiculo.chassi, detalhes.chassi),
+renavam: getFirst(veiculo.renavam, detalhes.renavam),
+
+proprietarioAtual: getFirst(
+proprietario.nome,
+proprietario.proprietario_atual,
+detalhes.proprietario_atual
+),
+
+documentoProprietario: getFirst(
+proprietario.documento,
+proprietario.documento_proprietario,
+detalhes.documento_proprietario
+),
+
+tipoDocumentoProprietario: getFirst(
+proprietario.tipo_documento,
+proprietario.tipo_documento_proprietario,
+detalhes.tipo_documento_proprietario
+),
+
+rouboFurto: getFirst(
+status.roubo_furto,
+veiculo.roubo_furto,
+detalhes.roubo_furto,
+'Não informado'
+),
+
+leilao: getFirst(
+status.leilao,
+veiculo.leilao,
+detalhes.leilao,
+'Não informado'
+),
+
+debitos: getFirst(
+status.debitos,
+veiculo.debitos,
+detalhes.debitos,
+'Não informado'
+),
+
+restricoes: getFirst(
+status.restricoes,
+veiculo.restricoes,
+detalhes.restricoes,
+'Não informado'
+),
+
+gravameStatus: getFirst(
+status.gravame,
+gravame.status,
+gravame.descricao,
+detalhes.gravame,
+gravame.situacao,
+'Não informado'
+),
+
+licenciamentoIpva: getFirst(
+status.licenciamento_ipva,
+status.licenciamento,
+detalhes.licenciamento_ipva,
+detalhes.licenciamento,
+'Não informado'
+),
+
+instituicaoCredora: getFirst(
+gravame.instituicao_credora,
+gravame.instituicaoCredora,
+detalhes.instituicao_credora
+),
+
+detalhesBloqueio: getFirst(
+gravame.detalhes_bloqueio,
+gravame.bloqueio,
+detalhes.detalhes_bloqueio
+),
+
+dataRegistroGravame: getFirst(
+gravame.data_registro,
+gravame.data_registro_gravame,
+detalhes.data_registro_gravame
+),
+
+codigoFipe: getFirst(
+fipe.codigo_fipe,
+fipe.codigo,
+detalhes.codigo_fipe
+),
+
+modeloVersaoFipe: getFirst(
+fipe.modelo,
+fipe.modelo_versao,
+detalhes.modelo_versao_fipe
+),
+
+mesReferenciaFipe: getFirst(
+fipe.mes_referencia,
+fipe.referencia,
+detalhes.mes_referencia_fipe
+),
+
+quantidadeInfracoesRenainf: getFirst(
+detalhes.quantidade_infracoes_renainf,
+veiculo.quantidade_infracoes_renainf
+),
+
+valorTotalInfracoesRenainf: getFirst(
+detalhes.valor_total_infracoes_renainf,
+veiculo.valor_total_infracoes_renainf
+),
+
+resumoInfracoesRenainf: getFirst(
+detalhes.resumo_infracoes_renainf,
+veiculo.resumo_infracoes_renainf
+)
+};
+}
+
+function montarResumo(relatorio) {
+const frases = [];
+
+frases.push(`Consulta completa carregada com sucesso para a placa ${relatorio.placa}.`);
+
+if (relatorio.marcaModelo !== '-') {
+frases.push(`Veículo identificado como ${relatorio.marcaModelo}.`);
+}
+
+if (relatorio.ano !== '-') {
+frases.push(`Ano informado: ${relatorio.ano}.`);
+}
+
+if (relatorio.fipeValor !== '-') {
+frases.push(`Valor FIPE identificado: ${formatarFIPE(relatorio.fipeValor)}.`);
+}
+
+if (relatorio.gravameStatus !== '-') {
+frases.push(`Situação do gravame: ${relatorio.gravameStatus}.`);
+}
+
+if (relatorio.debitos !== '-') {
+frases.push(`Situação de débitos: ${relatorio.debitos}.`);
+}
+
+if (relatorio.restricoes !== '-') {
+frases.push(`Restrições: ${relatorio.restricoes}.`);
+}
+
+return frases.join(' ');
 }
 
 function preencherRelatorio(data) {
-setText('placa-veiculo', data.placa || (placa ? placa.toUpperCase() : '-'));
+const relatorio = normalizarDados(data);
 
-setText('marca-modelo', data.vehicle?.marca_modelo);
-setText('ano', data.vehicle?.ano);
-setText('cor', data.vehicle?.cor);
-setText('combustivel', data.vehicle?.combustivel);
-setText('fipe', data.vehicle?.fipe);
-setText('chassi', data.vehicle?.chassi);
-setText('renavam', data.vehicle?.renavam);
+setText('placa-veiculo', relatorio.placa);
 
-setText('proprietario-atual', data.details?.proprietario_atual);
-setText('documento-proprietario', data.details?.documento_proprietario);
-setText('tipo-documento-proprietario', data.details?.tipo_documento_proprietario);
+setText('marca-modelo', relatorio.marcaModelo);
+setText('ano', relatorio.ano);
+setText('cor', relatorio.cor);
+setText('combustivel', relatorio.combustivel);
+setText('fipe', relatorio.fipeValor, formatarFIPE);
+setText('chassi', relatorio.chassi);
+setText('renavam', relatorio.renavam);
 
-setStatusBadge('roubo-furto', data.status?.roubo_furto);
-setStatusBadge('leilao', data.status?.leilao);
-setStatusBadge('debitos', data.status?.debitos);
-setStatusBadge('restricoes', data.status?.restricoes);
-setStatusBadge('gravame', data.status?.gravame);
-setStatusBadge('licenciamento', data.status?.licenciamento_ipva);
+setText('proprietario-atual', relatorio.proprietarioAtual);
+setText('documento-proprietario', relatorio.documentoProprietario);
+setText('tipo-documento-proprietario', relatorio.tipoDocumentoProprietario);
 
-setText('instituicao-credora', data.details?.instituicao_credora);
-setText('detalhes-bloqueio', data.details?.detalhes_bloqueio);
-setText('data-registro-gravame', data.details?.data_registro_gravame);
-setText('codigo-fipe', data.details?.codigo_fipe);
-setText('modelo-versao-fipe', data.details?.modelo_versao_fipe);
-setText('mes-referencia-fipe', data.details?.mes_referencia_fipe);
-setText('quantidade-infracoes-renainf', data.details?.quantidade_infracoes_renainf);
-setText('valor-total-infracoes-renainf', data.details?.valor_total_infracoes_renainf);
-setText('resumo-infracoes-renainf', data.details?.resumo_infracoes_renainf);
+setStatusBadge('roubo-furto', relatorio.rouboFurto);
+setStatusBadge('leilao', relatorio.leilao);
+setStatusBadge('debitos', relatorio.debitos);
+setStatusBadge('restricoes', relatorio.restricoes);
+setStatusBadge('gravame', relatorio.gravameStatus);
+setStatusBadge('licenciamento', relatorio.licenciamentoIpva);
 
-const resumo = [
-`Consulta completa carregada com sucesso para a placa ${data.placa || (placa ? placa.toUpperCase() : '-')}.`,
-data.vehicle?.fipe ? `Valor FIPE identificado: ${formatarFIPE(data.vehicle.fipe)}.` : null,
-data.status?.gravame ? `Status do gravame: ${data.status.gravame}.` : null,
-data.status?.debitos ? `Situação de débitos: ${data.status.debitos}.` : null
-].filter(Boolean).join(' ');
+setText('instituicao-credora', relatorio.instituicaoCredora);
+setText('detalhes-bloqueio', relatorio.detalhesBloqueio);
+setText('data-registro-gravame', relatorio.dataRegistroGravame);
+setText('codigo-fipe', relatorio.codigoFipe);
+setText('modelo-versao-fipe', relatorio.modeloVersaoFipe);
+setText('mes-referencia-fipe', relatorio.mesReferenciaFipe);
+setText('quantidade-infracoes-renainf', relatorio.quantidadeInfracoesRenainf);
+setText('valor-total-infracoes-renainf', relatorio.valorTotalInfracoesRenainf, formatarValorMonetario);
+setText('resumo-infracoes-renainf', relatorio.resumoInfracoesRenainf);
 
-setText('resumo-consulta', resumo || 'Relatório carregado com sucesso.');
+setText('resumo-consulta', montarResumo(relatorio));
 }
 
 async function carregarRelatorio() {
@@ -639,7 +879,7 @@ return;
 }
 
 setText('placa-veiculo', placa.toUpperCase());
-setText('resumo-consulta', 'Carregando relatório...');
+setText('resumo-consulta', 'Carregando relatório completo...');
 
 try {
 const response = await fetch(`/.netlify/functions/get-report?placa=${encodeURIComponent(placa)}`);
@@ -652,7 +892,7 @@ throw new Error(data.error || 'Erro ao carregar relatório');
 preencherRelatorio(data);
 } catch (error) {
 console.error('Erro ao carregar relatório:', error);
-setText('resumo-consulta', 'Não foi possível carregar o relatório no momento.');
+setText('resumo-consulta', `Não foi possível carregar o relatório no momento. ${error.message || ''}`);
 }
 }
 

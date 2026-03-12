@@ -33,7 +33,7 @@ body: JSON.stringify({ success: false, erro: 'Placa não informada' })
 }
 
 const payload = {
-transaction_amount: 14.99,
+transaction_amount: 19.99,
 description: `Consulta placa ${placa} - iCarSP`,
 payment_method_id: 'pix',
 payer: {
