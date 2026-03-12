@@ -11,24 +11,6 @@ function safe(value, fallback = '-') {
 return value ?? fallback;
 }
 
-function avaliarStatusPadrao(texto, okText = 'Não consta', alertaText = 'Consta apontamento') {
-if (!texto || texto === '-') return okText;
-
-const valor = String(texto).toLowerCase();
-
-if (
-valor.includes('nada consta') ||
-valor.includes('não consta') ||
-valor.includes('nao consta') ||
-valor.includes('sem registro') ||
-valor.includes('regular')
-) {
-return okText;
-}
-
-return alertaText;
-}
-
 function montarTeaser(report) {
 let alertCount = 0;
 const alertas = [];
@@ -78,13 +60,13 @@ throw new Error('CONSULTARPLACA_API_KEY ou CONSULTARPLACA_EMAIL não configurado
 }
 
 const url = `https://api.consultarplaca.com.br/v2/consultarPlaca?placa=${encodeURIComponent(placa)}`;
+const basicAuth = Buffer.from(`${EMAIL}:${API_KEY}`).toString('base64');
 
 const response = await fetch(url, {
 method: 'GET',
 headers: {
 Accept: 'application/json',
-'x-api-key': API_KEY,
-email: EMAIL
+Authorization: `Basic ${basicAuth}`
 }
 });
 
@@ -109,8 +91,7 @@ return data;
 }
 
 function mapearDados(placa, apiData) {
-const dadosVeiculo =
-apiData?.dados?.informacoes_veiculo?.dados_veiculo || {};
+const dadosVeiculo = apiData?.dados?.informacoes_veiculo?.dados_veiculo || {};
 
 const marca = safe(dadosVeiculo?.marca);
 const modelo = safe(dadosVeiculo?.modelo);
