@@ -409,6 +409,10 @@ Relatório disponível
 <span>RENAVAM</span>
 <strong id="renavam">12345678901</strong>
 </div>
+<div class="info-item">  <!-- 🆕 NOVO CAMPO -->
+<span>Proprietário atual</span>
+<strong id="proprietario">-</strong>
+</div>
 </div>
 </section>
 
@@ -496,15 +500,11 @@ Este relatório possui finalidade informativa e de apoio à análise veicular. A
 <script>
 function formatarFIPE(valor) {
   if (!valor) return 'R$ -';
-  
-  // Se já vier formatado, retorna
   if (typeof valor === 'string' && valor.includes('R$')) {
     return valor;
   }
-  
   const numero = parseFloat(valor);
   if (isNaN(numero)) return valor || 'R$ -';
-  
   const valorFormatado = numero.toLocaleString('pt-BR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
@@ -516,50 +516,35 @@ const params = new URLSearchParams(window.location.search);
 const placa = params.get('placa');
 
 function setText(id, value) {
-const el = document.getElementById(id);
-if (el) {
-  if (id === 'fipe') {
-    el.textContent = formatarFIPE(value);
-  } else {
-    el.textContent = value || '-';
+  const el = document.getElementById(id);
+  if (el) {
+    if (id === 'fipe') {
+      el.textContent = formatarFIPE(value);
+    } else {
+      el.textContent = value || '-';
+    }
   }
-}
 }
 
 function setStatusBadge(id, value) {
-const el = document.getElementById(id);
-if (!el) return;
-
-el.textContent = value || '-';
-
-el.classList.remove('ok', 'alerta', 'critico');
-
-const texto = (value || '').toLowerCase();
-
-if (
-texto.includes('sem registro') ||
-texto.includes('não consta') ||
-texto.includes('nao consta') ||
-texto.includes('regular') ||
-texto.includes('inexistente')
-) {
-el.classList.add('ok');
-} else if (
-texto.includes('pendente') ||
-texto.includes('ativo') ||
-texto.includes('constam') ||
-texto.includes('restrição') ||
-texto.includes('restricao') ||
-texto.includes('em integração') ||
-texto.includes('em integracao')
-) {
-el.classList.add('alerta');
-} else {
-el.classList.add('alerta');
-}
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value || '-';
+  el.classList.remove('ok', 'alerta', 'critico');
+  const texto = (value || '').toLowerCase();
+  if (
+    texto.includes('sem registro') ||
+    texto.includes('não consta') ||
+    texto.includes('nao consta') ||
+    texto.includes('regular') ||
+    texto.includes('inexistente')
+  ) {
+    el.classList.add('ok');
+  } else {
+    el.classList.add('alerta');
+  }
 }
 
-// Função para preencher o relatório com os dados (reutilizável)
 function preencherRelatorio(data) {
   setText('placa-veiculo', data.placa || placa.toUpperCase());
   
@@ -570,6 +555,14 @@ function preencherRelatorio(data) {
   setText('fipe', data.vehicle?.fipe);
   setText('chassi', data.vehicle?.chassi);
   setText('renavam', data.vehicle?.renavam);
+  
+  // 🆕 Proprietário atual
+  if (data.details?.proprietario_atual) {
+    const prop = data.details.proprietario_atual;
+    setText('proprietario', `${prop.nome} (${prop.documento})`);
+  } else {
+    setText('proprietario', '-');
+  }
   
   setStatusBadge('roubo-furto', data.status?.roubo_furto);
   setStatusBadge('leilao', data.status?.leilao);
@@ -586,8 +579,7 @@ function preencherRelatorio(data) {
   setText('resumo-consulta', resumoPersonalizado);
 }
 
-// NOVA FUNÇÃO: Carrega relatório com cache no localStorage
-async function carregarRelatorioComCache() {
+async function carregarRelatorio() {
   if (!placa) {
     setText('placa-veiculo', 'PLACA NÃO INFORMADA');
     setText('resumo-consulta', 'Nenhuma placa foi informada para consulta.');
@@ -597,42 +589,12 @@ async function carregarRelatorioComCache() {
   setText('placa-veiculo', placa.toUpperCase());
   setText('resumo-consulta', 'Carregando relatório...');
   
-  const chaveCache = `relatorio_${placa}`;
-  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas em milissegundos
-  
-  // Tenta recuperar do cache
-  try {
-    const cacheStr = localStorage.getItem(chaveCache);
-    const cacheTime = localStorage.getItem(`${chaveCache}_time`);
-    
-    if (cacheStr && cacheTime && (Date.now() - parseInt(cacheTime) < CACHE_DURATION)) {
-      console.log('📦 Relatório carregado do cache');
-      const data = JSON.parse(cacheStr);
-      preencherRelatorio(data);
-      return;
-    }
-  } catch (e) {
-    console.warn('Erro ao ler cache:', e);
-  }
-  
-  // Se não tiver cache válido, consulta a API
-  console.log('🌐 Consultando API...');
-  
   try {
     const response = await fetch(`/.netlify/functions/get-report?placa=${encodeURIComponent(placa)}`);
     const data = await response.json();
     
     if (!response.ok) {
       throw new Error(data.error || 'Erro ao carregar relatório');
-    }
-    
-    // Salva no cache para consultas futuras
-    try {
-      localStorage.setItem(chaveCache, JSON.stringify(data));
-      localStorage.setItem(`${chaveCache}_time`, Date.now().toString());
-      console.log('💾 Relatório salvo no cache');
-    } catch (e) {
-      console.warn('Erro ao salvar cache:', e);
     }
     
     preencherRelatorio(data);
@@ -643,8 +605,7 @@ async function carregarRelatorioComCache() {
   }
 }
 
-// Substitui a chamada antiga pela nova com cache
-carregarRelatorioComCache();
+carregarRelatorio();
 </script>
 </body>
 </html>
