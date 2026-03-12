@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -54,7 +55,9 @@ body: JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY não configurado' })
 };
 }
 
-const placaNormalizada = String(placa).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+const placaNormalizada = String(placa)
+.replace(/[^a-zA-Z0-9]/g, '')
+.toUpperCase();
 
 const payload = {
 transaction_amount: 19.99,
@@ -71,7 +74,8 @@ const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
 method: 'POST',
 headers: {
 Authorization: `Bearer ${accessToken}`,
-'Content-Type': 'application/json'
+'Content-Type': 'application/json',
+'X-Idempotency-Key': crypto.randomUUID()
 },
 body: JSON.stringify(payload)
 });
