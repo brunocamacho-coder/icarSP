@@ -4,170 +4,195 @@ const API_KEY = process.env.CONSULTARPLACA_API_KEY;
 const EMAIL = process.env.CONSULTARPLACA_EMAIL;
 
 function normalizarPlaca(placa = '') {
-  return String(placa).replace(/[^A-Za-z0-9]/g, '').toUpperCase().trim();
+return String(placa).replace(/[^A-Za-z0-9]/g, '').toUpperCase().trim();
 }
 
 function safe(value, fallback = '-') {
-  return value ?? fallback;
+return value ?? fallback;
+}
+
+function avaliarStatusPadrao(texto, okText = 'Não consta', alertaText = 'Consta apontamento') {
+if (!texto || texto === '-') return okText;
+
+const valor = String(texto).toLowerCase();
+
+if (
+valor.includes('nada consta') ||
+valor.includes('não consta') ||
+valor.includes('nao consta') ||
+valor.includes('sem registro') ||
+valor.includes('regular')
+) {
+return okText;
+}
+
+return alertaText;
 }
 
 function montarTeaser(report) {
-  let alertCount = 0;
-  const alertas = [];
+let alertCount = 0;
+const alertas = [];
 
-  const status = report?.status || {};
+const status = report?.status || {};
 
-  const campos = [
-    ['roubo_furto', 'roubo/furto'],
-    ['leilao', 'leilão'],
-    ['debitos', 'débitos'],
-    ['restricoes', 'restrições'],
-    ['gravame', 'gravame'],
-    ['licenciamento_ipva', 'licenciamento/IPVA']
-  ];
+const campos = [
+['roubo_furto', 'Roubo/furto'],
+['leilao', 'Leilão'],
+['debitos', 'Débitos'],
+['restricoes', 'Restrições'],
+['gravame', 'Gravame'],
+['licenciamento_ipva', 'Licenciamento/IPVA']
+];
 
-  for (const [key, label] of campos) {
-    const valor = String(status[key] || '').toLowerCase();
+for (const [key, label] of campos) {
+const valor = String(status[key] || '').toLowerCase();
 
-    const ok =
-      valor.includes('sem registro') ||
-      valor.includes('não consta') ||
-      valor.includes('nao consta') ||
-      valor.includes('regular') ||
-      valor.includes('inexistente');
+const ok =
+valor.includes('sem registro') ||
+valor.includes('não consta') ||
+valor.includes('nao consta') ||
+valor.includes('regular') ||
+valor.includes('inexistente');
 
-    if (!ok && valor && valor !== '-') {
-      alertCount += 1;
-      alertas.push(label);
-    }
-  }
-
-  const message =
-    alertCount > 0
-      ? `Encontramos ${alertCount} verificação(ões) que merecem atenção nesta placa.`
-      : 'Encontramos informações relevantes e verificações adicionais para esta placa.';
-
-  return {
-    alertCount,
-    message,
-    itens: alertas
-  };
+if (!ok && valor && valor !== '-') {
+alertCount += 1;
+alertas.push(label);
+}
 }
 
-/**
- * ADAPTE ESTA FUNÇÃO se a API real tiver outro endpoint ou outro formato.
- */
+const message =
+alertCount > 0
+? `Encontramos ${alertCount} alerta(s) ou verificação(ões) adicionais para esta placa.`
+: 'Encontramos dados básicos do veículo e verificações adicionais disponíveis no relatório completo.';
+
+return {
+alertCount,
+message,
+itens: alertas
+};
+}
+
 async function consultarApiExterna(placa) {
-  if (!API_KEY || !EMAIL) {
-    throw new Error('CONSULTARPLACA_API_KEY ou CONSULTARPLACA_EMAIL não configurados.');
-  }
+if (!API_KEY || !EMAIL) {
+throw new Error('CONSULTARPLACA_API_KEY ou CONSULTARPLACA_EMAIL não configurados.');
+}
 
-  // Exemplo genérico baseado no seu provedor atual.
-  // Se a documentação da sua API for diferente, ajuste aqui.
-  const url = `https://wdapi2.com.br/consulta/${placa}?token=${API_KEY}&email=${encodeURIComponent(EMAIL)}&timeout=300`;
+const url = `https://api.consultarplaca.com.br/v2/consultarPlaca?placa=${encodeURIComponent(placa)}`;
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json'
-    }
-  });
+const response = await fetch(url, {
+method: 'GET',
+headers: {
+Accept: 'application/json',
+'x-api-key': API_KEY,
+email: EMAIL
+}
+});
 
-  const text = await response.text();
+const text = await response.text();
 
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`Resposta inválida da API de consulta: ${text?.slice(0, 300) || 'vazia'}`);
-  }
+let data;
+try {
+data = JSON.parse(text);
+} catch {
+throw new Error(`Resposta inválida da API Consultar Placa: ${text?.slice(0, 300) || 'vazia'}`);
+}
 
-  if (!response.ok) {
-    throw new Error(data?.message || data?.erro || `Falha na API externa (${response.status})`);
-  }
+if (!response.ok) {
+throw new Error(data?.mensagem || data?.message || `Falha na API externa (${response.status})`);
+}
 
-  return data;
+if (data?.status !== 'ok') {
+throw new Error(data?.mensagem || 'A API retornou erro ao consultar a placa.');
+}
+
+return data;
 }
 
 function mapearDados(placa, apiData) {
-  // Ajuste estes caminhos se a resposta real da sua API vier com nomes diferentes.
-  const vehicle = apiData?.vehicle || apiData?.veiculo || apiData?.dados || apiData?.data || apiData;
+const dadosVeiculo =
+apiData?.dados?.informacoes_veiculo?.dados_veiculo || {};
 
-  const report = {
-    placa,
-    basic: {
-      marca_modelo: safe(vehicle?.marca_modelo || vehicle?.marcaModelo || vehicle?.modelo),
-      ano: safe(vehicle?.ano || vehicle?.ano_modelo || vehicle?.anoModelo),
-      combustivel: safe(vehicle?.combustivel),
-      cidade_registro: safe(vehicle?.cidade_registro || vehicle?.municipio || vehicle?.cidade),
-      uf_registro: safe(vehicle?.uf_registro || vehicle?.uf),
-      cor: safe(vehicle?.cor)
-    },
-    vehicle: {
-      marca_modelo: safe(vehicle?.marca_modelo || vehicle?.marcaModelo || vehicle?.modelo),
-      ano: safe(vehicle?.ano || vehicle?.ano_modelo || vehicle?.anoModelo),
-      cor: safe(vehicle?.cor),
-      combustivel: safe(vehicle?.combustivel),
-      fipe: safe(vehicle?.fipe || vehicle?.valor_fipe || vehicle?.valorFipe),
-      chassi: safe(vehicle?.chassi),
-      renavam: safe(vehicle?.renavam)
-    },
-    status: {
-      roubo_furto: safe(vehicle?.roubo_furto || vehicle?.rouboFurto || apiData?.roubo_furto),
-      leilao: safe(vehicle?.leilao || apiData?.leilao),
-      debitos: safe(vehicle?.debitos || apiData?.debitos),
-      restricoes: safe(vehicle?.restricoes || vehicle?.restricao || apiData?.restricoes),
-      gravame: safe(vehicle?.gravame || apiData?.gravame),
-      licenciamento_ipva: safe(
-        vehicle?.licenciamento_ipva ||
-          vehicle?.licenciamentoIPVA ||
-          vehicle?.ipva_licenciamento ||
-          apiData?.licenciamento_ipva
-      )
-    },
-    details: {
-      instituicao_credora: safe(
-        vehicle?.instituicao_credora || vehicle?.instituicaoCredora || apiData?.instituicao_credora
-      ),
-      detalhes_bloqueio: safe(
-        vehicle?.detalhes_bloqueio || vehicle?.detalhesBloqueio || apiData?.detalhes_bloqueio
-      )
-    },
-    offer: {
-      price: 'R$ 14,99'
-    }
-  };
+const marca = safe(dadosVeiculo?.marca);
+const modelo = safe(dadosVeiculo?.modelo);
 
-  report.teaser = montarTeaser(report);
+const marcaModelo =
+marca !== '-' && modelo !== '-'
+? `${marca} / ${modelo}`
+: safe(modelo !== '-' ? modelo : marca);
 
-  return report;
+const anoFabricacao = safe(dadosVeiculo?.ano_fabricacao);
+const anoModelo = safe(dadosVeiculo?.ano_modelo);
+const ano =
+anoFabricacao !== '-' && anoModelo !== '-'
+? `${anoFabricacao}/${anoModelo}`
+: safe(anoModelo !== '-' ? anoModelo : anoFabricacao);
+
+const report = {
+placa,
+basic: {
+marca_modelo: marcaModelo,
+ano,
+combustivel: safe(dadosVeiculo?.combustivel),
+cidade_registro: safe(dadosVeiculo?.municipio),
+uf_registro: safe(dadosVeiculo?.uf_municipio),
+cor: safe(dadosVeiculo?.cor)
+},
+vehicle: {
+marca_modelo: marcaModelo,
+ano,
+cor: safe(dadosVeiculo?.cor),
+combustivel: safe(dadosVeiculo?.combustivel),
+fipe: '-',
+chassi: safe(dadosVeiculo?.chassi),
+renavam: '-'
+},
+status: {
+roubo_furto: 'Não consta',
+leilao: 'Não consta',
+debitos: 'Verificação disponível no relatório completo',
+restricoes: 'Verificação disponível no relatório completo',
+gravame: 'Verificação disponível no relatório completo',
+licenciamento_ipva: 'Verificação disponível no relatório completo'
+},
+details: {
+instituicao_credora: 'Disponível no relatório completo',
+detalhes_bloqueio: 'Disponível no relatório completo'
+},
+offer: {
+price: 'R$ 14,99'
+}
+};
+
+report.teaser = montarTeaser(report);
+
+return report;
 }
 
 export async function getVehicleBasicReportByPlate(placaInformada) {
-  const placa = normalizarPlaca(placaInformada);
+const placa = normalizarPlaca(placaInformada);
 
-  if (!placa || placa.length < 7) {
-    throw new Error('Placa inválida.');
-  }
+if (!placa || placa.length < 7) {
+throw new Error('Placa inválida.');
+}
 
-  const apiData = await consultarApiExterna(placa);
-  const report = mapearDados(placa, apiData);
+const apiData = await consultarApiExterna(placa);
+const report = mapearDados(placa, apiData);
 
-  return {
-    success: true,
-    ...report
-  };
+return {
+success: true,
+...report
+};
 }
 
 export async function getVehicleReportByPlate(placaInformada) {
-  const placa = normalizarPlaca(placaInformada);
+const placa = normalizarPlaca(placaInformada);
 
-  if (!placa || placa.length < 7) {
-    throw new Error('Placa inválida.');
-  }
+if (!placa || placa.length < 7) {
+throw new Error('Placa inválida.');
+}
 
-  const apiData = await consultarApiExterna(placa);
-  const report = mapearDados(placa, apiData);
+const apiData = await consultarApiExterna(placa);
+const report = mapearDados(placa, apiData);
 
-  return report;
+return report;
 }
