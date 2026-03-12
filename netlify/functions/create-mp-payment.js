@@ -40,15 +40,31 @@ body: JSON.stringify({ error: 'SITE_URL não configurado' })
 };
 }
 
-const body = {
+if (!process.env.SUPABASE_URL) {
+return {
+statusCode: 500,
+body: JSON.stringify({ error: 'SUPABASE_URL não configurado' })
+};
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+return {
+statusCode: 500,
+body: JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY não configurado' })
+};
+}
+
+const placaNormalizada = String(placa).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+const payload = {
 transaction_amount: 19.99,
-description: `Consulta veicular placa ${placa.toUpperCase()}`,
+description: `Consulta veicular placa ${placaNormalizada}`,
 payment_method_id: 'pix',
 payer: {
 email: email || 'cliente@icarsp.com.br'
 },
 notification_url: `${siteUrl}/.netlify/functions/mp-webhook`,
-external_reference: placa.toUpperCase()
+external_reference: placaNormalizada
 };
 
 const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -57,16 +73,20 @@ headers: {
 Authorization: `Bearer ${accessToken}`,
 'Content-Type': 'application/json'
 },
-body: JSON.stringify(body)
+body: JSON.stringify(payload)
 });
 
 const mpData = await mpResponse.json();
 
 if (!mpResponse.ok) {
+const statusCode = mpResponse.status === 429 ? 429 : 500;
+
 return {
-statusCode: 500,
+statusCode,
 body: JSON.stringify({
-error: 'Erro ao criar pagamento',
+error: mpResponse.status === 429
+? 'Muitas tentativas de gerar PIX em pouco tempo. Aguarde alguns minutos e tente novamente.'
+: 'Erro ao criar pagamento',
 details: mpData
 })
 };
@@ -74,11 +94,21 @@ details: mpData
 
 const paymentId = String(mpData.id);
 
+if (!paymentId) {
+return {
+statusCode: 500,
+body: JSON.stringify({
+error: 'Mercado Pago não retornou paymentId',
+details: mpData
+})
+};
+}
+
 const { error: insertError } = await supabase
 .from('vehicle_reports')
 .upsert({
 payment_id: paymentId,
-placa: placa.toUpperCase(),
+placa: placaNormalizada,
 status: 'pending',
 customer_email: email || null,
 updated_at: new Date().toISOString()
@@ -97,8 +127,10 @@ details: insertError.message
 return {
 statusCode: 200,
 body: JSON.stringify({
+success: true,
 paymentId,
-status: mpData.status,
+payment_id: paymentId,
+status: mpData.status || 'pending',
 qr_code: mpData.point_of_interaction?.transaction_data?.qr_code || null,
 qr_code_base64: mpData.point_of_interaction?.transaction_data?.qr_code_base64 || null,
 pix_copia_e_cola: mpData.point_of_interaction?.transaction_data?.qr_code || null,
@@ -106,6 +138,8 @@ ticket_url: mpData.transaction_details?.external_resource_url || null
 })
 };
 } catch (error) {
+console.error('Erro interno create-mp-payment:', error);
+
 return {
 statusCode: 500,
 body: JSON.stringify({
