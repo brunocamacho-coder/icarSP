@@ -540,14 +540,34 @@ return '-';
 function formatarMoeda(valor) {
 if (!valor || valor === '-') return '-';
 
-const numero = parseFloat(
-String(valor)
-.replace(/[^\d,.-]/g, '')
-.replace(/\./g, '')
-.replace(',', '.')
-);
+if (typeof valor === 'number') {
+return valor.toLocaleString('pt-BR', {
+style: 'currency',
+currency: 'BRL'
+});
+}
 
-if (isNaN(numero)) return valorOuTraco(valor);
+let texto = String(valor).trim().replace(/[^\d.,-]/g, '');
+
+if (/^\d+\.\d{2}$/.test(texto)) {
+const numero = parseFloat(texto);
+return numero.toLocaleString('pt-BR', {
+style: 'currency',
+currency: 'BRL'
+});
+}
+
+if (/^\d{1,3}(\.\d{3})*,\d{2}$/.test(texto)) {
+const numero = parseFloat(texto.replace(/\./g, '').replace(',', '.'));
+return numero.toLocaleString('pt-BR', {
+style: 'currency',
+currency: 'BRL'
+});
+}
+
+const numero = Number(texto.replace(',', '.'));
+
+if (isNaN(numero)) return valor;
 
 return numero.toLocaleString('pt-BR', {
 style: 'currency',
@@ -596,7 +616,6 @@ function preencherRelatorio(payload) {
 const report = payload.report || {};
 
 const veiculoInfo = report.veiculo?.dados?.informacoes_veiculo?.dados_veiculo || {};
-const veiculoTecnico = report.veiculo?.dados?.informacoes_veiculo?.dados_tecnicos || {};
 const proprietario = report.proprietarioAtual?.dados?.proprietario_atual || {};
 const gravame = report.gravame?.dados?.gravame || {};
 const fipeLista = report.precoFipe?.dados?.informacoes_fipe || [];
