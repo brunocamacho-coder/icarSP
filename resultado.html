@@ -537,34 +537,8 @@ return value;
 return '-';
 }
 
-function formatarFIPE(valor) {
+function formatarMoeda(valor) {
 if (!valor || valor === '-') return '-';
-
-if (typeof valor === 'string' && valor.includes('R$')) {
-return valor;
-}
-
-const numero = parseFloat(
-String(valor)
-.replace(/[^\d,.-]/g, '')
-.replace(/\./g, '')
-.replace(',', '.')
-);
-
-if (isNaN(numero)) return valorOuTraco(valor);
-
-return numero.toLocaleString('pt-BR', {
-style: 'currency',
-currency: 'BRL'
-});
-}
-
-function formatarValorMonetario(valor) {
-if (!valor || valor === '-') return '-';
-
-if (typeof valor === 'string' && valor.includes('R$')) {
-return valor;
-}
 
 const numero = parseFloat(
 String(valor)
@@ -584,58 +558,7 @@ currency: 'BRL'
 function setText(id, value, formatter = null) {
 const el = document.getElementById(id);
 if (!el) return;
-
-const finalValue = formatter ? formatter(value) : valorOuTraco(value);
-el.textContent = finalValue;
-}
-
-function definirClasseStatus(texto) {
-const t = String(texto || '').toLowerCase();
-
-if (
-t.includes('sem registro') ||
-t.includes('não consta') ||
-t.includes('nao consta') ||
-t.includes('regular') ||
-t.includes('inexistente') ||
-t.includes('não possui') ||
-t.includes('nao possui') ||
-t.includes('sem débitos') ||
-t.includes('sem debitos') ||
-t.includes('nada consta') ||
-t.includes('livre')
-) {
-return 'ok';
-}
-
-if (
-t.includes('roubo') ||
-t.includes('furto') ||
-t.includes('bloqueio') ||
-t.includes('restrição grave') ||
-t.includes('restricao grave')
-) {
-return 'critico';
-}
-
-if (
-t.includes('ativo') ||
-t.includes('constam') ||
-t.includes('pendente') ||
-t.includes('indisponível') ||
-t.includes('indisponivel') ||
-t.includes('restrição') ||
-t.includes('restricao') ||
-t.includes('gravame') ||
-t.includes('débito') ||
-t.includes('debito') ||
-t.includes('leilão') ||
-t.includes('leilao')
-) {
-return 'alerta';
-}
-
-return 'alerta';
+el.textContent = formatter ? formatter(value) : valorOuTraco(value);
 }
 
 function setStatusBadge(id, value) {
@@ -645,227 +568,87 @@ if (!el) return;
 const texto = valorOuTraco(value);
 el.textContent = texto;
 el.classList.remove('ok', 'alerta', 'critico');
-el.classList.add(definirClasseStatus(texto));
+
+const t = texto.toLowerCase();
+
+if (
+t.includes('nao') ||
+t.includes('não') ||
+t.includes('sem') ||
+t.includes('ok') ||
+t.includes('regular')
+) {
+el.classList.add('ok');
+} else if (
+t.includes('sim') ||
+t.includes('gravame') ||
+t.includes('bloqueio') ||
+t.includes('restrição') ||
+t.includes('restricao')
+) {
+el.classList.add('alerta');
+} else {
+el.classList.add('alerta');
 }
-
-function normalizarDados(payload) {
-const report = payload.report || {};
-const veiculo = report.veiculo || report.vehicle || {};
-const gravame = report.gravame || {};
-const proprietario = report.proprietarioAtual || report.proprietario_atual || report.proprietario || {};
-const fipe = report.precoFipe || report.fipe || {};
-const detalhes = report.details || report.detalhes || {};
-
-return {
-placa: getFirst(report.placa, payload.placa, '-'),
-
-marcaModelo: getFirst(
-veiculo.marca_modelo,
-veiculo.marcaModelo,
-veiculo.modelo,
-detalhes.marca_modelo
-),
-
-ano: getFirst(
-veiculo.ano,
-veiculo.ano_modelo,
-veiculo.anoModelo
-),
-
-cor: getFirst(veiculo.cor, detalhes.cor),
-combustivel: getFirst(veiculo.combustivel, detalhes.combustivel),
-
-fipeValor: getFirst(
-fipe.valor,
-fipe.preco,
-fipe.valor_fipe,
-detalhes.valor_fipe,
-veiculo.fipe
-),
-
-chassi: getFirst(veiculo.chassi, detalhes.chassi),
-renavam: getFirst(veiculo.renavam, detalhes.renavam),
-
-proprietarioAtual: getFirst(
-proprietario.nome,
-proprietario.proprietario_atual,
-detalhes.proprietario_atual
-),
-
-documentoProprietario: getFirst(
-proprietario.documento,
-proprietario.documento_proprietario,
-detalhes.documento_proprietario
-),
-
-tipoDocumentoProprietario: getFirst(
-proprietario.tipo_documento,
-proprietario.tipo_documento_proprietario,
-detalhes.tipo_documento_proprietario
-),
-
-rouboFurto: getFirst(
-veiculo.roubo_furto,
-detalhes.roubo_furto,
-'Não informado'
-),
-
-leilao: getFirst(
-veiculo.leilao,
-detalhes.leilao,
-'Não informado'
-),
-
-debitos: getFirst(
-veiculo.debitos,
-detalhes.debitos,
-'Não informado'
-),
-
-restricoes: getFirst(
-veiculo.restricoes,
-detalhes.restricoes,
-'Não informado'
-),
-
-gravameStatus: getFirst(
-gravame.status,
-gravame.descricao,
-detalhes.gravame,
-gravame.situacao,
-'Não informado'
-),
-
-licenciamentoIpva: getFirst(
-veiculo.licenciamento_ipva,
-veiculo.licenciamento,
-detalhes.licenciamento_ipva,
-detalhes.licenciamento,
-'Não informado'
-),
-
-instituicaoCredora: getFirst(
-gravame.instituicao_credora,
-gravame.instituicaoCredora,
-detalhes.instituicao_credora
-),
-
-detalhesBloqueio: getFirst(
-gravame.detalhes_bloqueio,
-gravame.bloqueio,
-detalhes.detalhes_bloqueio
-),
-
-dataRegistroGravame: getFirst(
-gravame.data_registro,
-gravame.data_registro_gravame,
-detalhes.data_registro_gravame
-),
-
-codigoFipe: getFirst(
-fipe.codigo_fipe,
-fipe.codigo,
-detalhes.codigo_fipe
-),
-
-modeloVersaoFipe: getFirst(
-fipe.modelo,
-fipe.modelo_versao,
-detalhes.modelo_versao_fipe
-),
-
-mesReferenciaFipe: getFirst(
-fipe.mes_referencia,
-fipe.referencia,
-detalhes.mes_referencia_fipe
-),
-
-quantidadeInfracoesRenainf: getFirst(
-detalhes.quantidade_infracoes_renainf,
-veiculo.quantidade_infracoes_renainf
-),
-
-valorTotalInfracoesRenainf: getFirst(
-detalhes.valor_total_infracoes_renainf,
-veiculo.valor_total_infracoes_renainf
-),
-
-resumoInfracoesRenainf: getFirst(
-detalhes.resumo_infracoes_renainf,
-veiculo.resumo_infracoes_renainf
-)
-};
-}
-
-function montarResumo(relatorio) {
-const frases = [];
-
-frases.push(`Relatório salvo carregado com sucesso para a consulta ${relatorio.placa}.`);
-
-if (relatorio.marcaModelo !== '-') {
-frases.push(`Veículo identificado como ${relatorio.marcaModelo}.`);
-}
-
-if (relatorio.ano !== '-') {
-frases.push(`Ano informado: ${relatorio.ano}.`);
-}
-
-if (relatorio.fipeValor !== '-') {
-frases.push(`Valor FIPE identificado: ${formatarFIPE(relatorio.fipeValor)}.`);
-}
-
-if (relatorio.gravameStatus !== '-') {
-frases.push(`Situação do gravame: ${relatorio.gravameStatus}.`);
-}
-
-if (relatorio.debitos !== '-') {
-frases.push(`Situação de débitos: ${relatorio.debitos}.`);
-}
-
-if (relatorio.restricoes !== '-') {
-frases.push(`Restrições: ${relatorio.restricoes}.`);
-}
-
-frases.push('Atualizar esta página não consome novamente seus créditos de API.');
-
-return frases.join(' ');
 }
 
 function preencherRelatorio(payload) {
-const relatorio = normalizarDados(payload);
+const report = payload.report || {};
 
-setText('placa-veiculo', relatorio.placa);
+const veiculoInfo = report.veiculo?.dados?.informacoes_veiculo?.dados_veiculo || {};
+const veiculoTecnico = report.veiculo?.dados?.informacoes_veiculo?.dados_tecnicos || {};
+const proprietario = report.proprietarioAtual?.dados?.proprietario_atual || {};
+const gravame = report.gravame?.dados?.gravame || {};
+const fipeLista = report.precoFipe?.dados?.informacoes_fipe || [];
+const fipe = fipeLista[0] || {};
 
-setText('marca-modelo', relatorio.marcaModelo);
-setText('ano', relatorio.ano);
-setText('cor', relatorio.cor);
-setText('combustivel', relatorio.combustivel);
-setText('fipe', relatorio.fipeValor, formatarFIPE);
-setText('chassi', relatorio.chassi);
-setText('renavam', relatorio.renavam);
+const marcaModelo = [veiculoInfo.marca, veiculoInfo.modelo].filter(Boolean).join(' ');
+const gravameTexto = gravame.possui_gravame === 'nao'
+? 'Não possui gravame'
+: gravame.possui_gravame === 'sim'
+? 'Possui gravame'
+: gravame.possui_gravame || '-';
 
-setText('proprietario-atual', relatorio.proprietarioAtual);
-setText('documento-proprietario', relatorio.documentoProprietario);
-setText('tipo-documento-proprietario', relatorio.tipoDocumentoProprietario);
+setText('placa-veiculo', getFirst(report.placa, payload.placa));
+setText('marca-modelo', marcaModelo);
+setText('ano', getFirst(veiculoInfo.ano_modelo, veiculoInfo.ano_fabricacao));
+setText('cor', veiculoInfo.cor);
+setText('combustivel', veiculoInfo.combustivel);
+setText('fipe', fipe.preco, formatarMoeda);
+setText('chassi', veiculoInfo.chassi);
+setText('renavam', '-');
 
-setStatusBadge('roubo-furto', relatorio.rouboFurto);
-setStatusBadge('leilao', relatorio.leilao);
-setStatusBadge('debitos', relatorio.debitos);
-setStatusBadge('restricoes', relatorio.restricoes);
-setStatusBadge('gravame', relatorio.gravameStatus);
-setStatusBadge('licenciamento', relatorio.licenciamentoIpva);
+setText('proprietario-atual', proprietario.nome);
+setText('documento-proprietario', proprietario.documento);
+setText('tipo-documento-proprietario', proprietario.tipo_documento);
 
-setText('instituicao-credora', relatorio.instituicaoCredora);
-setText('detalhes-bloqueio', relatorio.detalhesBloqueio);
-setText('data-registro-gravame', relatorio.dataRegistroGravame);
-setText('codigo-fipe', relatorio.codigoFipe);
-setText('modelo-versao-fipe', relatorio.modeloVersaoFipe);
-setText('mes-referencia-fipe', relatorio.mesReferenciaFipe);
-setText('quantidade-infracoes-renainf', relatorio.quantidadeInfracoesRenainf);
-setText('valor-total-infracoes-renainf', relatorio.valorTotalInfracoesRenainf, formatarValorMonetario);
-setText('resumo-infracoes-renainf', relatorio.resumoInfracoesRenainf);
+setStatusBadge('roubo-furto', 'Não informado');
+setStatusBadge('leilao', 'Não informado');
+setStatusBadge('debitos', 'Não informado');
+setStatusBadge('restricoes', 'Não informado');
+setStatusBadge('gravame', gravameTexto);
+setStatusBadge('licenciamento', 'Não informado');
 
-setText('resumo-consulta', montarResumo(relatorio));
+setText('instituicao-credora', gravame.registro || '-');
+setText('detalhes-bloqueio', gravameTexto);
+setText('data-registro-gravame', report.gravame?.data_solicitacao || '-');
+
+setText('codigo-fipe', fipe.codigo_fipe);
+setText('modelo-versao-fipe', fipe.modelo_versao);
+setText('mes-referencia-fipe', fipe.mes_referencia);
+setText('quantidade-infracoes-renainf', '-');
+setText('valor-total-infracoes-renainf', '-');
+setText('resumo-infracoes-renainf', '-');
+
+const resumo = [
+`Relatório gerado com sucesso para a placa ${getFirst(report.placa, payload.placa)}.`,
+marcaModelo ? `Veículo: ${marcaModelo}.` : null,
+veiculoInfo.ano_modelo ? `Ano/modelo: ${veiculoInfo.ano_modelo}.` : null,
+fipe.preco ? `Preço FIPE: ${formatarMoeda(fipe.preco)}.` : null,
+gravameTexto ? `Situação do gravame: ${gravameTexto}.` : null
+].filter(Boolean).join(' ');
+
+setText('resumo-consulta', resumo);
 }
 
 async function carregarRelatorio() {
@@ -886,7 +669,7 @@ if (!response.ok) {
 throw new Error(data.error || 'Erro ao buscar relatório salvo');
 }
 
-if (data.status === 'pending') {
+if (data.status === 'pending' || data.status === 'processing') {
 setText('placa-veiculo', data.placa || '-');
 setText('resumo-consulta', 'Pagamento encontrado, mas o relatório ainda está sendo processado. Atualize novamente em alguns instantes.');
 return;
