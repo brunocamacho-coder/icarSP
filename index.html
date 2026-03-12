@@ -229,7 +229,6 @@ font-size: 0.95rem;
 line-height: 1.6;
 }
 
-/* Preview grátis */
 .preview-wrapper {
 display: none;
 margin-top: 28px;
@@ -424,6 +423,7 @@ box-shadow: 0 16px 30px rgba(34, 197, 94, 0.28);
 opacity: 0.7;
 cursor: not-allowed;
 transform: none;
+box-shadow: none;
 }
 
 @media (max-width: 768px) {
@@ -454,7 +454,6 @@ padding: 22px;
 </head>
 <body>
 
-<!-- HEADER -->
 <header class="header">
 <div class="header-inner">
 <img src="logo.png" alt="icarSP" class="header-logo" />
@@ -467,7 +466,6 @@ padding: 22px;
 </div>
 </header>
 
-<!-- HERO -->
 <section class="hero" id="busca">
 <div class="hero-inner">
 <span class="badge"><i class="fa fa-shield-halved"></i> Consulta veicular online para São Paulo</span>
@@ -564,7 +562,6 @@ Desbloquear relatório completo
 </div>
 </section>
 
-<!-- CONSULTA -->
 <section class="consulta-section" id="consulta">
 <div class="consulta-inner">
 <h2 class="consulta-title">RELATÓRIO VEICULAR</h2>
@@ -633,7 +630,6 @@ Consultar placa agora
 </div>
 </section>
 
-<!-- RECURSOS -->
 <section class="section" id="recursos">
 <div class="section-inner">
 <h2 class="section-title">O que você encontra no relatório</h2>
@@ -673,7 +669,6 @@ Consultar placa agora
 </div>
 </section>
 
-<!-- COMO FUNCIONA -->
 <section class="section section-dark" id="como-funciona">
 <div class="section-inner">
 <h2 class="section-title">Como funciona</h2>
@@ -704,7 +699,6 @@ Consultar placa agora
 </div>
 </section>
 
-<!-- FOOTER -->
 <footer class="footer" id="contato">
 <div class="footer-inner">
 <div class="footer-col">
@@ -733,7 +727,6 @@ Consultar placa agora
 </div>
 </footer>
 
-<!-- Modal PIX Mercado Pago -->
 <div id="pix-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center;">
 <div style="background: white; padding: 30px; border-radius: 16px; max-width: 400px; width: calc(100% - 32px); text-align: center;">
 <h2 style="color: #333; margin-bottom: 20px;">Pagamento PIX</h2>
@@ -823,6 +816,7 @@ let paymentIdAtual = '';
 let pollingInterval = null;
 
 async function iniciarPagamentoMP() {
+const unlockButton = document.getElementById('unlock-report-button');
 placaAtual = document.getElementById('preview-placa').textContent.trim();
 
 if (!placaAtual || placaAtual === '-') {
@@ -830,10 +824,17 @@ alert('Faça a consulta da placa primeiro.');
 return;
 }
 
+if (unlockButton.disabled) {
+return;
+}
+
 const modal = document.getElementById('pix-modal');
 const qrContainer = document.getElementById('qr-code-container');
 const pixInput = document.getElementById('pix-copia-cola');
 const statusDiv = document.getElementById('status-pagamento');
+
+unlockButton.disabled = true;
+unlockButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Gerando PIX...';
 
 modal.style.display = 'flex';
 statusDiv.innerHTML = 'Gerando pagamento...';
@@ -872,11 +873,16 @@ qrContainer.innerHTML = '<p style="color:#333;">QR Code não disponível.</p>';
 pixInput.value = data.pix_copia_e_cola || data.qr_code || '';
 statusDiv.innerHTML = '⏳ Pagamento PIX gerado! Aguardando confirmação...';
 
+unlockButton.innerHTML = '<i class="fa fa-clock"></i> Aguardando pagamento...';
+
 verificarPagamentoMP(paymentIdAtual);
 } catch (error) {
 console.error('Erro ao iniciar pagamento:', error);
-statusDiv.innerHTML = '❌ Erro: ' + error.message;
+statusDiv.innerHTML = '❌ ' + error.message;
 qrContainer.innerHTML = '';
+
+unlockButton.disabled = false;
+unlockButton.innerHTML = '<i class="fa fa-unlock-keyhole"></i> Desbloquear relatório completo';
 }
 }
 
@@ -896,6 +902,10 @@ pollingInterval = null;
 
 document.getElementById('status-pagamento').innerHTML = '✅ PAGAMENTO CONFIRMADO! Redirecionando...';
 
+const unlockButton = document.getElementById('unlock-report-button');
+unlockButton.disabled = true;
+unlockButton.innerHTML = '<i class="fa fa-check"></i> Pagamento confirmado';
+
 setTimeout(() => {
 window.location.href = `/resultado.html?paymentId=${encodeURIComponent(paymentId)}`;
 }, 2000);
@@ -904,6 +914,10 @@ clearInterval(pollingInterval);
 pollingInterval = null;
 
 document.getElementById('status-pagamento').innerHTML = '❌ Pagamento não confirmado. Tente novamente.';
+
+const unlockButton = document.getElementById('unlock-report-button');
+unlockButton.disabled = false;
+unlockButton.innerHTML = '<i class="fa fa-unlock-keyhole"></i> Tentar novamente';
 }
 } catch (error) {
 console.error('Erro ao verificar pagamento:', error);
@@ -924,6 +938,10 @@ document.getElementById('pix-modal').style.display = 'none';
 document.getElementById('qr-code-container').innerHTML = '';
 document.getElementById('pix-copia-cola').value = '';
 document.getElementById('status-pagamento').innerHTML = '';
+
+const unlockButton = document.getElementById('unlock-report-button');
+unlockButton.disabled = false;
+unlockButton.innerHTML = '<i class="fa fa-unlock-keyhole"></i> Desbloquear relatório completo';
 
 if (pollingInterval) {
 clearInterval(pollingInterval);
